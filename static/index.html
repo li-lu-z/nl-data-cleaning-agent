@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>数据清洗助手</title>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --panel: #ffffff;
+      --border: #e4e8ee;
+      --primary: #2f6bff;
+      --text: #1f2733;
+      --muted: #7a8699;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    header h1 { font-size: 18px; margin: 0; }
+    header .subtitle { color: var(--muted); font-size: 12px; }
+    .btn {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    main {
+      flex: 1;
+      display: flex;
+      gap: 16px;
+      padding: 16px 20px;
+      min-height: 0;
+    }
+    .chat-panel, .data-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .chat-panel { flex: 1.2; }
+    .data-panel { flex: 1; }
+    .panel-title {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .msg {
+      max-width: 82%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: var(--primary);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.assistant {
+      align-self: flex-start;
+      background: #f0f3f8;
+      border-bottom-left-radius: 4px;
+    }
+    .chat-input {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+    }
+    .chat-input input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .table-wrap { flex: 1; overflow: auto; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: #f7f9fc;
+      z-index: 1;
+    }
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 40px 20px;
+      font-size: 14px;
+    }
+    .meta { color: var(--muted); font-size: 12px; padding: 0 16px 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>数据清洗助手</h1>
+      <div class="subtitle">导入 CSV / Excel，用对话完成清洗与查询</div>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input id="fileInput" type="file" accept=".csv,.xlsx,.xls" hidden />
+      <button class="btn" onclick="document.getElementById('fileInput').click()">导入数据</button>
+      <button id="downloadBtn" class="btn primary" disabled>下载结果</button>
+      <button id="scriptBtn" class="btn" disabled>导出脚本</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="chat-panel">
+      <div class="panel-title">对话</div>
+      <div id="messages">
+        <div class="msg assistant">你好！请先点右上角“导入数据”上传 CSV 或 Excel 文件，然后就可以用自然语言清洗数据了。</div>
+      </div>
+      <div class="chat-input">
+        <input id="chatInput" type="text" placeholder="例如：找出2026.10.6的数据 / 删除重复行 / 按重量从大到小排序" />
+        <button class="btn primary" onclick="sendMessage()">发送</button>
+      </div>
+    </section>
+
+    <section class="data-panel">
+      <div class="panel-title">
+        <span>数据预览</span>
+        <span id="meta" class="meta"></span>
+      </div>
+      <div id="table" class="table-wrap"><div class="empty">导入文件后这里会显示数据</div></div>
+    </section>
+  </main>
+
+  <script>
+    let sessionId = null;
+
+    const fileInput = document.getElementById('fileInput');
+    const messages = document.getElementById('messages');
+    const chatInput = document.getElementById('chatInput');
+    const tableEl = document.getElementById('table');
+    const metaEl = document.getElementById('meta');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const scriptBtn = document.getElementById('scriptBtn');
+
+    function addMessage(text, role) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      div.textContent = text;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function renderTable(preview) {
+      if (!preview || !preview.columns || preview.columns.length === 0) {
+        tableEl.innerHTML = '<div class="empty">没有可显示的数据</div>';
+        return;
+      }
+      let html = '<table><thead><tr>';
+      preview.columns.forEach(c => html += '<th>' + escapeHtml(c) + '</th>');
+      html += '</tr></thead><tbody>';
+      (preview.rows || []).forEach(row => {
+        html += '<tr>';
+        preview.columns.forEach(c => {
+          const v = row[c];
+          html += '<td>' + escapeHtml(v === null || v === undefined ? '' : String(v)) + '</td>';
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      tableEl.innerHTML = html;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      addMessage('正在导入：' + file.name, 'user');
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '上传失败');
+        sessionId = data.session_id;
+        addMessage(data.message, 'assistant');
+        metaEl.textContent = '共 ' + data.rows + ' 行 · ' + data.columns.length + ' 列';
+        renderTable(data.preview);
+        downloadBtn.disabled = false;
+        scriptBtn.disabled = false;
+      } catch (e) {
+        addMessage('导入失败：' + e.message, 'assistant');
+      } finally {
+        fileInput.value = '';
+      }
+    });
+
+    async function sendMessage() {
+      const text = chatInput.value.trim();
+      if (!text) return;
+      if (!sessionId) {
+        addMessage('请先导入数据文件。', 'assistant');
+        return;
+      }
+      addMessage(text, 'user');
+      chatInput.value = '';
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, message: text })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '请求失败');
+        addMessage(data.reply, 'assistant');
+        metaEl.textContent = '共 ' + data.rows + ' 行 · ' + data.columns.length + ' 列';
+        renderTable(data.preview);
+      } catch (e) {
+        addMessage('出错了：' + e.message, 'assistant');
+      }
+    }
+
+    chatInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      if (sessionId) window.location.href = '/api/download/' + sessionId;
+    });
+
+    scriptBtn.addEventListener('click', () => {
+      if (sessionId) window.location.href = '/api/script/' + sessionId;
+    });
+  </script>
+</body>
+</html>

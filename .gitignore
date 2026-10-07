@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 测试缓存
+.pytest_cache/
+
+# 运行时生成的数据库与输出（不要提交）
+data/*.db
+data/clean/
+
+# 敏感信息：本地 key 文件 / 环境变量 / 日志
+deepseek_key.txt
+.env
+*.log
+
+# IDE / 系统文件
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,19 @@
+# 数据清洗配置（物流数据示例）
+source: data/raw/logistics.csv     # 输入：原始数据文件
+output_dir: data/clean             # 输出目录
+output_format: csv                 # 输出格式：csv 或 xlsx
+
+cleaning:
+  drop_duplicates: true            # 去除完全重复的行
+  trim_whitespace: true            # 去掉文本首尾空格
+  normalize_column_names: true     # 列名统一为小写 + 下划线
+  convert_types: true              # 数值型字符串自动转数值
+  missing:
+    strategy: drop                 # drop: 删除含空值的行; fill: 用固定值填充
+    fill_value: ""                 # strategy=fill 时的填充值
+  standardize_dates:
+    enabled: true                  # 是否标准化日期列
+    columns: [下单时间, 签收时间]   # 需要标准化的日期列名
+
+query:
+  date_column: 下单时间            # 按日期查询时默认使用的列名
